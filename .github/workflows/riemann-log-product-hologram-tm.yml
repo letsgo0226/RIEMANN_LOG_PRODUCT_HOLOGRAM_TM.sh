@@ -1,0 +1,48 @@
+name: RIEMANN_LOG_PRODUCT_HOLOGRAM_TM
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  push:
+    branches: [main, master]
+    paths:
+      - "RIEMANN_LOG_PRODUCT_HOLOGRAM_TM.sh"
+      - "RIEMANN_LOG_PRODUCT_HOLOGRAM_TM.md"
+      - ".github/workflows/riemann-log-product-hologram-tm.yml"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [riemann_log_product_hologram_tm]
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify hologram TM certificate
+        run: |
+          set -euo pipefail
+          BYTES=$(wc -c < RIEMANN_LOG_PRODUCT_HOLOGRAM_TM.sh | tr -d ' ')
+          echo "bytes=$BYTES"
+          test "$BYTES" -lt 2048
+          rm -f state.json
+          bash RIEMANN_LOG_PRODUCT_HOLOGRAM_TM.sh | tee cert.json
+          python3 - <<'PY'
+          import json
+          o=json.load(open("cert.json"))
+          ex=o.get("exact") or {}
+          cl=o.get("claims") or {}
+          assert o.get("model")=="RIEMANN_LOG_PRODUCT_HOLOGRAM_TM"
+          assert ex.get("float") is False and ex.get("sha") is False
+          assert cl.get("RH_proved") is False
+          assert isinstance(o.get("tick"), int) and o.get("tick")>=1
+          assert o.get("x")==[1,2] and o.get("s")==[3,4]
+          print("PASS", "tick=", o.get("tick"), "limit=", o.get("limit"))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: riemann-log-product-hologram-tm-certificate
+          path: cert.json
